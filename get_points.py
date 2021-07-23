@@ -1,59 +1,33 @@
-import sys
+from matplotlib import pyplot as plt
 import cv2
-import matplotlib.pyplot as plt
-import seaborn as sns
 import numpy as np
-import glob
 
-# create SIFT object ((a feature detection algorithm))
-sift = cv2.xfeatures2d.SIFT_create()
-# create BFMatcher object
+sift = cv2.SIFT_create()
 bf = cv2.BFMatcher()
 
-####################
-# Run whole process
-####################
 
-
-def detecting_mirrorLine(picture_name: str, title: str, show_detail=True):
+def angle_with_x_axis(pi, pj):  # 公式在文件里解释
     """
-    Main function
-
-    If show_detail = True, plot matching details
+    calculate θij:
+        the angle this line subtends with the x-axis.
     """
-    # create mirror object
-    mirror = Mirror_Symmetry_detection(picture_name)
+    # get the difference between point p1 and p2
+    x, y = pi[0] - pj[0], pi[1] - pj[1]
 
-    # extracting and Matching a pair of symmetric features
-    matchpoints = mirror.find_matchpoints()
+    if x == 0:
+        return np.pi / 2
 
-    # get r, tehta (polar coordinates) of the midpoints of all pair of symmetric features
-    points_r, points_theta = mirror.find_points_r_theta(matchpoints)
-
-    if show_detail:  # visualize process in detail
-        mirror.draw_matches(matchpoints, top=10)
-        mirror.draw_hex(points_r, points_theta)
-
-    # find the best one with highest vote
-    image_hexbin = plt.hexbin(points_r, points_theta,
-                              bins=200, cmap=plt.cm.Spectral_r)
-    sorted_vote = mirror.sort_hexbin_by_votes(image_hexbin)
-    r, theta = mirror.find_coordinate_maxhexbin(
-        image_hexbin, sorted_vote, vertical=False)
-
-    # add mirror line based on r and theta
-    mirror.draw_mirrorLine(r, theta, title)
+    angle = np.arctan(y / x)
+    if angle < 0:
+        angle += np.pi
+    return angle
 
 
-def test_case(filesPath):
-    files = sorted([f for f in glob.glob(filesPath)])
-    for file in files:
-        detecting_mirrorLine(file, "With Mirror Line")
-
-
-#############################
-# Mirror symmetry detection
-#############################
+def midpoint(pi, pj):
+    """
+    get x and y coordinates of the midpoint of pi and pj
+    """
+    return (pi[0] + pj[0]) / 2, (pi[1] + pj[1]) / 2
 
 
 class Mirror_Symmetry_detection:
@@ -202,26 +176,39 @@ class Mirror_Symmetry_detection:
         plt.title(title)
         plt.show()
 
+    def get_mid_line_points(self):
+        matchpoints = self.find_matchpoints()
 
-def angle_with_x_axis(pi, pj):  # 公式在文件里解释
-    """
-    calculate θij:
-        the angle this line subtends with the x-axis.
-    """
-    # get the difference between point p1 and p2
-    x, y = pi[0] - pj[0], pi[1] - pj[1]
+        # get r, tehta (polar coordinates) of the midpoints of all pair of symmetric features
+        points_r, points_theta = self.find_points_r_theta(matchpoints)
 
-    if x == 0:
-        return np.pi / 2
+        # find the best one with highest vote
+        image_hexbin = plt.hexbin(points_r, points_theta,
+                                  bins=200, cmap=plt.cm.Spectral_r)
+        plt.close()
 
-    angle = np.arctan(y / x)
-    if angle < 0:
-        angle += np.pi
-    return angle
+        sorted_vote = self.sort_hexbin_by_votes(image_hexbin)
+        r, theta = self.find_coordinate_maxhexbin(
+            image_hexbin, sorted_vote, vertical=False)
+
+        points_J = np.arange(self.image.shape[0])
+        points_I = (r - points_J * np.sin(theta)) // np.cos(theta)
+
+        return np.stack((points_I, points_J), axis=1)
 
 
-def midpoint(pi, pj):
-    """
-    get x and y coordinates of the midpoint of pi and pj
-    """
-    return (pi[0] + pj[0]) / 2, (pi[1] + pj[1]) / 2
+def test(filename='1_butterfly.png'):
+    msd = Mirror_Symmetry_detection(f'./images/{filename}')
+
+    points = msd.get_mid_line_points()
+    print(np.max(points[:, 0]), np.min(points[:, 0]))
+    print(np.max(points[:, 1]), np.min(points[:, 1]))
+    plt.imshow(msd.image)
+    plt.plot(points[:, 0], points[:, 1])
+    plt.axis('off')
+    plt.savefig(f'images/ans-{filename}')
+
+
+if __name__ == "__main__":
+    test("rotate-left-25.jpg")
+    test("rotate-right-25.jpg")
